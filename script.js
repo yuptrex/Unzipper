@@ -6,6 +6,7 @@ const currentFile = document.getElementById("currentFile");
 const statusMsg = document.getElementById("statusMsg");
 
 const ZIP_PATH = "kb.zip";
+const DOWNLOAD_DELAY_MS = 180; // small gap so the browser doesn't block rapid multi-downloads
 
 function setProgress(percent, fileName) {
   progressFill.style.width = percent + "%";
@@ -24,6 +25,10 @@ function resetUI() {
   setProgress(0, "");
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchZip() {
   let response;
   try {
@@ -37,74 +42,25 @@ async function fetchZip() {
   return await response.blob();
 }
 
-async function writeFileToDir(dirHandle, path, data) {
-  const parts = path.split("/").filter(Boolean);
-  const fileName = parts.pop();
-  let currentDir = dirHandle;
-
-  for (const part of parts) {
-    currentDir = await currentDir.getDirectoryHandle(part, { create: true });
-  }
-
-  const fileHandle = await currentDir.getFileHandle(fileName, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(data);
-  await writable.close();
+// Triggers a browser download for a single file. Uses the "kb/" prefix so
+// Chrome/Edge group extracted files into a "kb" subfolder inside Downloads
+// (folder structure in the download name is honored by Chromium browsers).
+function downloadBlob(blob, path) {
+  const safePath = "kb/" + path.split("/").filter(Boolean).join("/");
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = safePath;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke slightly later so the browser has time to start the download
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 async function extract() {
   resetUI();
-
-  if (!window.showDirectoryPicker) {
-    setStatus("Your browser doesn't support folder access (File System Access API). Try Chrome or Edge.", "error");
-    return;
-  }
-
-  if (window.location.protocol === "file:") {
-    setStatus(
-      "This page is open directly from disk (file://). The folder picker needs a local server — see instructions below the button.",
-      "error"
-    );
-    return;
-  }
-
   extractBtn.disabled = true;
-
-  let dirHandle;
-  try {
-    dirHandle = await window.showDirectoryPicker();
-  } catch (err) {
-    console.error("showDirectoryPicker failed:", err.name, err.message);
-    if (err.name === "AbortError") {
-      setStatus("Folder selection was cancelled.", "error");
-    } else if (err.name === "SecurityError") {
-      setStatus("Folder access was blocked by the browser (SecurityError). This usually happens on file:// pages or inside embedded webviews — try opening this page via a local server in a normal browser tab.", "error");
-    } else if (err.name === "NotAllowedError") {
-      setStatus("Permission to access the folder was denied.", "error");
-    } else {
-      setStatus("Could not open the folder picker (" + err.name + "). Try a different browser tab, not an embedded webview.", "error");
-    }
-    extractBtn.disabled = false;
-    return;
-  }
-
-  if (!dirHandle) {
-    setStatus("No folder was selected.", "error");
-    extractBtn.disabled = false;
-    return;
-  }
-
-  // Verify/request readwrite permission
-  try {
-    const perm = await dirHandle.requestPermission({ mode: "readwrite" });
-    if (perm !== "granted") {
-      throw new Error("permission-denied");
-    }
-  } catch (err) {
-    setStatus("Write permission to the selected folder was denied.", "error");
-    extractBtn.disabled = false;
-    return;
-  }
 
   let zipBlob;
   try {
@@ -121,26 +77,26 @@ async function extract() {
 
   try {
     const zip = await JSZip.loadAsync(zipBlob);
-    const entries = Object.values(zip.files);
+    const entries = Object.values(zip.files).filter((e) => !e.dir);
     const total = entries.length || 1;
     let completed = 0;
 
     for (const entry of entries) {
       currentFile.textContent = entry.name;
 
-      if (entry.dir) {
-        await entry.async("string").catch(() => {});
-      } else {
-        const data = await entry.async("blob");
-        await writeFileToDir(dirHandle, entry.name, data);
-      }
+      const data = await entry.async("blob");
+      downloadBlob(data, entry.name);
 
       completed++;
       setProgress((completed / total) * 100, entry.name);
+
+      // Small delay between downloads so the browser doesn't throttle
+      // or block them as a "multiple download" popup flood.
+      await sleep(DOWNLOAD_DELAY_MS);
     }
 
     setProgress(100, "");
-    setStatus("Extraction Complete", "success");
+    setStatus("Extraction Complete — files saved to your Downloads folder (in a \"kb\" subfolder).", "success");
   } catch (err) {
     console.error(err);
     setStatus("Something went wrong during extraction: " + (err.message || "unknown error"), "error");

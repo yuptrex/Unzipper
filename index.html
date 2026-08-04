@@ -10,7 +10,7 @@
 
   <div class="card">
     <h1>KB Extractor</h1>
-    <p class="subtitle">Extract <code>kb.zip</code> to a folder of your choice</p>
+    <p class="subtitle">Extract <code>kb.zip</code> — files save straight to your Downloads folder</p>
 
     <button id="extractBtn" class="extract-btn">Extract</button>
 
@@ -25,13 +25,17 @@
     <div id="statusMsg" class="status-msg"></div>
 
     <details class="help">
-      <summary>Folder picker not opening?</summary>
+      <summary>Where do files go?</summary>
       <p>
-        This page must be served over <code>http://</code>, not opened directly as a
-        <code>file://</code> path. From a terminal in this folder, run:
+        No folder selection is needed. Each file inside <code>kb.zip</code> downloads
+        automatically using your browser's default download location.
       </p>
-      <pre>python3 -m http.server 8000</pre>
-      <p>then open <code>http://localhost:8000</code> in Chrome or Edge (not an embedded browser/webview).</p>
+      <p>
+        In Chrome/Edge, files are saved into a <code>kb</code> subfolder inside your
+        Downloads folder. If your browser is set to "Ask where to save each file,"
+        you may see repeated save prompts — turn that off in browser settings for a
+        fully automatic run.
+      </p>
     </details>
   </div>
 
