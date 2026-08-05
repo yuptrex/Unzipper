@@ -102,15 +102,6 @@ h1 {
   color: #cfe0f0;
 }
 
-.current-file {
-  margin-top: 4px;
-  font-size: 0.78rem;
-  color: #6f8298;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .status-msg {
   margin-top: 20px;
   font-size: 0.95rem;

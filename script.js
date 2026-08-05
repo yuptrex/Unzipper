@@ -2,15 +2,13 @@ const extractBtn = document.getElementById("extractBtn");
 const progressWrap = document.getElementById("progressWrap");
 const progressFill = document.getElementById("progressFill");
 const progressLabel = document.getElementById("progressLabel");
-const currentFile = document.getElementById("currentFile");
 const statusMsg = document.getElementById("statusMsg");
 
 const ZIP_PATH = "kb.zip";
 
-function setProgress(percent, fileName) {
+function setProgress(percent) {
   progressFill.style.width = percent + "%";
   progressLabel.textContent = Math.round(percent) + "%";
-  if (fileName !== undefined) currentFile.textContent = fileName;
 }
 
 function setStatus(text, type) {
@@ -21,7 +19,7 @@ function setStatus(text, type) {
 function resetUI() {
   setStatus("", "");
   progressWrap.classList.add("hidden");
-  setProgress(0, "");
+  setProgress(0);
 }
 
 function sleep(ms) {
@@ -139,7 +137,6 @@ async function extract() {
     let filesCopied = 0;
 
     for (const entry of entries) {
-      currentFile.textContent = entry.name;
       setStatus("Reading files into memory...", "");
 
       const data = await entry.async("uint8array");
@@ -152,7 +149,7 @@ async function extract() {
       filesCopied++;
       // Reading phase counts for the first half of the progress bar.
       const percent = (filesCopied / entries.length) * 50;
-      setProgress(percent, entry.name);
+      setProgress(percent);
     }
 
     setStatus("Building final archive...", "");
@@ -162,11 +159,11 @@ async function extract() {
       (metadata) => {
         // Generation phase counts for the second half of the progress bar.
         const percent = 50 + (metadata.percent / 100) * 50;
-        setProgress(percent, metadata.currentFile || "");
+        setProgress(percent);
       }
     );
 
-    setProgress(100, "");
+    setProgress(100);
     setStatus("Starting download...", "");
     downloadBlob(outputBlob, "kb-extracted.zip");
     setStatus("Extraction Complete — \"kb-extracted.zip\" saved to your Downloads folder.", "success");
