@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KB Extractor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+<title>Oryans Free World</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
   <div class="card">
-    <h1>KB Extractor</h1>
+    <h1>Oryans Free World</h1>
 
-    <button id="extractBtn" class="extract-btn">Extract</button>
+    <button id="extractBtn" class="extract-btn">Start Game</button>
 
     <div id="progressWrap" class="progress-wrap hidden">
       <div class="progress-track">
@@ -21,23 +21,6 @@
     </div>
 
     <div id="statusMsg" class="status-msg"></div>
-
-    <details class="help">
-      <summary>How this works</summary>
-      <p>
-        Clicking Extract reads every file out of <code>kb.zip</code>, repackages them
-        into a single new file, and downloads that one file —
-        <code>kb-extracted.zip</code> — to your browser's default download location.
-        No folder picker, no per-file prompts.
-      </p>
-      <p>
-        Because everything is rebuilt into one output file, the whole archive's
-        uncompressed contents pass through memory while processing. Very large
-        archives (several GB or more) can take real time to process and use
-        significant browser memory — keep the tab open until you see
-        "Extraction Complete."
-      </p>
-    </details>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>

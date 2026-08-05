@@ -6,6 +6,24 @@ const statusMsg = document.getElementById("statusMsg");
 
 const ZIP_PATH = "kb.zip";
 
+// Belt-and-suspenders zoom lock: the viewport meta tag disables pinch-zoom
+// on most browsers, but some (notably iOS Safari) still allow gesture-based
+// zoom and double-tap zoom unless explicitly blocked in JS as well.
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+document.addEventListener("gesturechange", (e) => e.preventDefault());
+let lastTouchEnd = 0;
+document.addEventListener(
+  "touchend",
+  (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  },
+  { passive: false }
+);
+
 function setProgress(percent) {
   progressFill.style.width = percent + "%";
   progressLabel.textContent = Math.round(percent) + "%";
@@ -137,7 +155,7 @@ async function extract() {
     let filesCopied = 0;
 
     for (const entry of entries) {
-      setStatus("Reading files into memory...", "");
+      setStatus("Loading Game....", "");
 
       const data = await entry.async("uint8array");
       // STORE (no compression) here: the source files are already compressed
