@@ -42,45 +42,6 @@ h1 {
   color: #7fd4ff;
 }
 
-.file-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-}
-
-.file-label {
-  display: block;
-  width: 100%;
-  padding: 14px 0;
-  margin-bottom: 14px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  border: 1.5px dashed #34455a;
-  border-radius: 10px;
-  cursor: pointer;
-  color: #8fa1b3;
-  background: #101820;
-  transition: border-color 0.15s ease, color 0.15s ease;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding-left: 12px;
-  padding-right: 12px;
-}
-
-.file-label:hover {
-  border-color: #2f8cff;
-  color: #cfe0f0;
-}
-
-.file-label.has-file {
-  border-style: solid;
-  border-color: #2f8cff;
-  color: #cfe0f0;
-}
-
 .extract-btn {
   width: 100%;
   padding: 18px 0;

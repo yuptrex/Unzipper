@@ -1,5 +1,3 @@
-const fileInput = document.getElementById("fileInput");
-const fileLabel = document.getElementById("fileLabel");
 const extractBtn = document.getElementById("extractBtn");
 const progressWrap = document.getElementById("progressWrap");
 const progressFill = document.getElementById("progressFill");
@@ -7,9 +5,8 @@ const progressLabel = document.getElementById("progressLabel");
 const currentFile = document.getElementById("currentFile");
 const statusMsg = document.getElementById("statusMsg");
 
+const ZIP_PATH = "kb.zip";
 const DOWNLOAD_DELAY_MS = 180; // small gap so the browser doesn't block rapid multi-downloads
-
-let selectedFile = null;
 
 function setProgress(percent, fileName) {
   progressFill.style.width = percent + "%";
@@ -39,58 +36,57 @@ function formatBytes(bytes) {
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
 }
 
-// Folder name used to group downloaded files, derived from the chosen zip's
-// filename (e.g. "1.zip" -> "1", "kb.zip" -> "kb").
-function baseFolderName(fileName) {
-  const withoutExt = fileName.replace(/\.zip$/i, "");
-  return withoutExt.replace(/[^a-zA-Z0-9_\-]+/g, "_") || "extracted";
-}
-
-fileInput.addEventListener("change", () => {
-  resetUI();
-  const file = fileInput.files && fileInput.files[0];
-  if (!file) {
-    selectedFile = null;
-    fileLabel.textContent = "Choose a .zip file...";
-    fileLabel.classList.remove("has-file");
-    extractBtn.disabled = true;
-    return;
+async function fetchZip() {
+  let response;
+  try {
+    response = await fetch(ZIP_PATH, { cache: "no-store" });
+  } catch (err) {
+    throw new Error("Could not access " + ZIP_PATH + ". Make sure it is in the same folder as this page.");
+  }
+  if (!response.ok) {
+    throw new Error(ZIP_PATH + " was not found next to index.html (server returned " + response.status + "). Make sure kb.zip was actually uploaded/deployed alongside index.html, style.css, and script.js.");
   }
 
-  selectedFile = file;
-  fileLabel.textContent = file.name + " (" + formatBytes(file.size) + ")";
-  fileLabel.classList.add("has-file");
-  extractBtn.disabled = false;
-});
+  const blob = await response.blob();
 
-// Validates the chosen File object before handing it to JSZip: checks it's
-// non-empty and actually starts with a valid zip signature. Catches cases
-// like accidentally selecting a renamed non-zip file or a corrupted upload.
-async function validateZipFile(file) {
-  if (!file || file.size === 0) {
-    throw new Error("The selected file is empty (0 bytes). Choose a different file.");
+  // Sanity-check what we actually got before handing it to JSZip.
+  // A misconfigured server/route can return an HTML error page with a
+  // 200 status, or a proxy/dev-server can truncate a large binary response —
+  // both produce exactly this "corrupted zip" symptom downstream.
+  if (blob.size === 0) {
+    throw new Error(ZIP_PATH + " downloaded as an empty file (0 bytes). Re-check the file on the server.");
   }
 
-  const headerBytes = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  const headerBytes = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
   const isZipSignature =
     headerBytes[0] === 0x50 && headerBytes[1] === 0x4b && // "PK"
     (headerBytes[2] === 0x03 || headerBytes[2] === 0x05 || headerBytes[2] === 0x07);
 
   if (!isZipSignature) {
     throw new Error(
-      "\"" + file.name + "\" doesn't look like a valid zip file (wrong file signature). " +
-      "Make sure you selected an actual .zip archive and that it isn't corrupted or truncated."
+      "The file received at " + ZIP_PATH + " isn't a valid zip (wrong signature). " +
+      "This means kb.zip is missing from the deployed folder, or the server returned an " +
+      "error page (like a 404) instead of the file. Confirm kb.zip sits next to index.html " +
+      "in your deployment and that its filename is exactly \"kb.zip\" (case-sensitive)."
     );
   }
 
-  return file;
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && Number(contentLength) !== blob.size) {
+    throw new Error(
+      ZIP_PATH + " appears to have been truncated in transit (expected " + contentLength +
+      " bytes, got " + blob.size + "). Try again, possibly over a more stable connection or local server."
+    );
+  }
+
+  return blob;
 }
 
-// Triggers a browser download for a single extracted file, grouped into a
-// subfolder named after the source zip (Chromium browsers honor folder
-// structure embedded in the download filename).
-function downloadBlob(blob, path, folderName) {
-  const safePath = folderName + "/" + path.split("/").filter(Boolean).join("/");
+// Triggers a browser download for a single file. Uses the "kb/" prefix so
+// Chrome/Edge group extracted files into a "kb" subfolder inside Downloads
+// (folder structure in the download name is honored by Chromium browsers).
+function downloadBlob(blob, path) {
+  const safePath = "kb/" + path.split("/").filter(Boolean).join("/");
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -98,28 +94,21 @@ function downloadBlob(blob, path, folderName) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+  // Revoke slightly later so the browser has time to start the download
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 async function extract() {
   resetUI();
-
-  if (!selectedFile) {
-    setStatus("Choose a .zip file first.", "error");
-    return;
-  }
-
   extractBtn.disabled = true;
-  fileInput.disabled = true;
 
-  let validFile;
+  let zipBlob;
   try {
-    setStatus("Reading " + selectedFile.name + "...", "");
-    validFile = await validateZipFile(selectedFile);
+    setStatus("Reading kb.zip...", "");
+    zipBlob = await fetchZip();
   } catch (err) {
     setStatus(err.message, "error");
     extractBtn.disabled = false;
-    fileInput.disabled = false;
     return;
   }
 
@@ -128,16 +117,15 @@ async function extract() {
 
   let zip;
   try {
-    zip = await JSZip.loadAsync(validFile);
+    zip = await JSZip.loadAsync(zipBlob);
   } catch (err) {
-    console.error("JSZip failed to parse " + validFile.name + ":", err);
+    console.error("JSZip failed to parse kb.zip:", err);
     setStatus(
-      "\"" + validFile.name + "\" could not be read as a zip archive (" + (err.message || "corrupted data") + "). " +
-      "The file is likely incomplete or corrupted — try re-selecting or re-downloading it.",
+      "kb.zip could not be read as a zip archive (" + (err.message || "corrupted data") + "). " +
+      "The file is likely incomplete or corrupted — try re-uploading kb.zip and reload the page.",
       "error"
     );
     extractBtn.disabled = false;
-    fileInput.disabled = false;
     return;
   }
 
@@ -145,10 +133,8 @@ async function extract() {
     const entries = Object.values(zip.files).filter((e) => !e.dir);
 
     if (entries.length === 0) {
-      throw new Error("This zip file doesn't contain any files.");
+      throw new Error("kb.zip doesn't contain any files.");
     }
-
-    const folderName = baseFolderName(validFile.name);
 
     // Track progress by uncompressed bytes, not file count — a handful of
     // large files can dwarf many small ones, so byte-based progress is a
@@ -184,7 +170,7 @@ async function extract() {
 
       const entrySize = entry._data ? entry._data.uncompressedSize : 0;
       const data = await entry.async("blob");
-      downloadBlob(data, entry.name, folderName);
+      downloadBlob(data, entry.name);
 
       processedBytes += entrySize;
       const percent = Math.min(100, (processedBytes / totalBytes) * 100);
@@ -196,7 +182,7 @@ async function extract() {
     }
 
     setProgress(100, "");
-    setStatus("Extraction Complete — files saved to your Downloads folder (in a \"" + folderName + "\" subfolder).", "success");
+    setStatus("Extraction Complete — files saved to your Downloads folder (in a \"kb\" subfolder).", "success");
   } catch (err) {
     console.error(err);
     if (err && /memory|allocat/i.test(err.message || "")) {
@@ -206,7 +192,6 @@ async function extract() {
     }
   } finally {
     extractBtn.disabled = false;
-    fileInput.disabled = false;
   }
 }
 
