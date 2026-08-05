@@ -6,7 +6,6 @@ const currentFile = document.getElementById("currentFile");
 const statusMsg = document.getElementById("statusMsg");
 
 const ZIP_PATH = "kb.zip";
-const DOWNLOAD_DELAY_MS = 180; // small gap so the browser doesn't block rapid multi-downloads
 
 function setProgress(percent, fileName) {
   progressFill.style.width = percent + "%";
@@ -82,19 +81,15 @@ async function fetchZip() {
   return blob;
 }
 
-// Triggers a browser download for a single file. Uses the "kb/" prefix so
-// Chrome/Edge group extracted files into a "kb" subfolder inside Downloads
-// (folder structure in the download name is honored by Chromium browsers).
-function downloadBlob(blob, path) {
-  const safePath = "kb/" + path.split("/").filter(Boolean).join("/");
+// Triggers a single browser download for the final combined output zip.
+function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = safePath;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  // Revoke slightly later so the browser has time to start the download
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
@@ -113,7 +108,7 @@ async function extract() {
   }
 
   progressWrap.classList.remove("hidden");
-  setStatus("Extracting...", "");
+  setStatus("Loading archive...", "");
 
   let zip;
   try {
@@ -136,57 +131,49 @@ async function extract() {
       throw new Error("kb.zip doesn't contain any files.");
     }
 
-    // Track progress by uncompressed bytes, not file count — a handful of
-    // large files can dwarf many small ones, so byte-based progress is a
-    // much more accurate percentage no matter how the archive is structured.
-    const totalBytes = entries.reduce((sum, e) => sum + (e._data ? e._data.uncompressedSize : 0), 0) || 1;
-    let processedBytes = 0;
+    // Repackage into a brand-new zip so the final result is a single file,
+    // instead of triggering one download per entry. Everything is held in
+    // memory (RAM) throughout — no intermediate disk writes — which is fine
+    // for archives well within available system memory.
+    const outputZip = new JSZip();
+    let filesCopied = 0;
 
-    // A single file's uncompressed bytes must fit in memory at once — browsers
-    // have no API to stream a decompressing file straight to disk. This is a
-    // platform limit, not something this script can work around. Warn early
-    // rather than let the tab silently hang or crash on a huge single file.
-    const LARGE_FILE_WARN_BYTES = 1.5 * 1024 * 1024 * 1024; // 1.5 GB
-    const largestEntry = entries.reduce(
-      (max, e) => ((e._data ? e._data.uncompressedSize : 0) > max ? (e._data ? e._data.uncompressedSize : 0) : max),
-      0
-    );
-    if (largestEntry > LARGE_FILE_WARN_BYTES) {
-      setStatus(
-        "Warning: this archive contains a single file around " + formatBytes(largestEntry) +
-        " uncompressed. Very large individual files may run out of browser memory. Continuing...",
-        ""
-      );
-      await sleep(1200);
-    }
-
-    // Process one file at a time: decompress -> download -> release the blob
-    // before moving on. This keeps peak memory to roughly the size of the
-    // single largest file, rather than the whole archive, no matter how many
-    // total gigabytes the archive unpacks to.
     for (const entry of entries) {
       currentFile.textContent = entry.name;
-      setStatus("Extracting...", "");
+      setStatus("Reading files into memory...", "");
 
-      const entrySize = entry._data ? entry._data.uncompressedSize : 0;
-      const data = await entry.async("blob");
-      downloadBlob(data, entry.name);
+      const data = await entry.async("uint8array");
+      // STORE (no compression) here: the source files are already compressed
+      // inside kb.zip, so re-running DEFLATE on already-compressed bytes costs
+      // significant CPU time for little to no size reduction. STORE just
+      // packages the bytes as-is, which is much faster to generate.
+      outputZip.file(entry.name, data, { compression: "STORE" });
 
-      processedBytes += entrySize;
-      const percent = Math.min(100, (processedBytes / totalBytes) * 100);
-      setProgress(percent, entry.name + " (" + formatBytes(entrySize) + ")");
-
-      // Small delay between downloads so the browser doesn't throttle
-      // or block them as a "multiple download" popup flood.
-      await sleep(DOWNLOAD_DELAY_MS);
+      filesCopied++;
+      // Reading phase counts for the first half of the progress bar.
+      const percent = (filesCopied / entries.length) * 50;
+      setProgress(percent, entry.name);
     }
 
+    setStatus("Building final archive...", "");
+
+    const outputBlob = await outputZip.generateAsync(
+      { type: "blob", compression: "STORE" },
+      (metadata) => {
+        // Generation phase counts for the second half of the progress bar.
+        const percent = 50 + (metadata.percent / 100) * 50;
+        setProgress(percent, metadata.currentFile || "");
+      }
+    );
+
     setProgress(100, "");
-    setStatus("Extraction Complete — files saved to your Downloads folder (in a \"kb\" subfolder).", "success");
+    setStatus("Starting download...", "");
+    downloadBlob(outputBlob, "kb-extracted.zip");
+    setStatus("Extraction Complete — \"kb-extracted.zip\" saved to your Downloads folder.", "success");
   } catch (err) {
     console.error(err);
     if (err && /memory|allocat/i.test(err.message || "")) {
-      setStatus("Ran out of memory extracting a large file. Try closing other tabs, use a 64-bit browser, and retry.", "error");
+      setStatus("Ran out of browser memory. Try closing other tabs and retry.", "error");
     } else {
       setStatus("Something went wrong during extraction: " + (err.message || "unknown error"), "error");
     }
