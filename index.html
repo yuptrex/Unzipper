@@ -9,10 +9,13 @@
 <body>
 
   <div class="card">
-    <h1>KB Extractor</h1>
-    <p class="subtitle">Extract <code>kb.zip</code> — files save straight to your Downloads folder</p>
+    <h1>Zip Extractor</h1>
+    <p class="subtitle">Choose any .zip file — files save straight to your Downloads folder</p>
 
-    <button id="extractBtn" class="extract-btn">Extract</button>
+    <input type="file" id="fileInput" accept=".zip,application/zip,application/x-zip-compressed" class="file-input" />
+    <label for="fileInput" id="fileLabel" class="file-label">Choose a .zip file...</label>
+
+    <button id="extractBtn" class="extract-btn" disabled>Extract</button>
 
     <div id="progressWrap" class="progress-wrap hidden">
       <div class="progress-track">
@@ -27,14 +30,14 @@
     <details class="help">
       <summary>Where do files go?</summary>
       <p>
-        No folder selection is needed. Each file inside <code>kb.zip</code> downloads
+        No folder selection is needed. Each file inside the zip downloads
         automatically using your browser's default download location.
       </p>
       <p>
-        In Chrome/Edge, files are saved into a <code>kb</code> subfolder inside your
-        Downloads folder. If your browser is set to "Ask where to save each file,"
-        you may see repeated save prompts — turn that off in browser settings for a
-        fully automatic run.
+        In Chrome/Edge, files are saved into a subfolder (named after the zip)
+        inside your Downloads folder. If your browser is set to "Ask where to
+        save each file," you may see repeated save prompts — turn that off in
+        browser settings for a fully automatic run.
       </p>
       <p>
         Large archives (multi-GB uncompressed, many files) are supported — files are
